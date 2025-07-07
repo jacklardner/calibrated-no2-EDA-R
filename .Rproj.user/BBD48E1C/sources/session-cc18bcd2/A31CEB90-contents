@@ -1,0 +1,95 @@
+
+rm(list = ls()) # this clears my "environment"
+
+# This script describes common plotting functions for air pollution and met data
+
+#############################################################
+
+# Import packages
+
+library(lubridate)  
+library(dplyr)
+library(tidyverse)
+library(ggpubr)
+library(openair) # <--- Openair
+library(openairmaps) # <--- Openair
+library(ggplot2)
+library(zoo)
+library(plotly)
+
+#############################################################
+
+# Import RData files
+load("clean_data/pm_lcs_fire_clean.RData") # LCS PM2.5 during wildfire period
+load("clean_data/co_lcs_fire.RData") # LCS CO during wildfire period
+load("clean_data/pm_ref_fire_clean.RData") # EP PM2.5 during wildfire period
+load("clean_data/met_2023.RData") # Allens Ave WS + WD for all of 2023
+
+# Using RData files keeps the data types intact!
+class(pm_lcs_fire.df$date)
+
+#############################################################
+
+# Exploratory analysis: Pollutant summary statistics and plots
+
+# Use summaryplot to see if dataset is complete. NOTE you may run into problems with this function bc daylight savings, etc.
+summaryPlot(co_lcs_fire.df)
+summaryPlot(met.df) 
+
+# Calculate summary statistics
+pm_stat.df <- pm_lcs_fire.df %>%
+  group_by(site) %>% # if there is group structure, you MUST account for it
+  summarise(
+    mean_pm = mean(pm),
+    min_pm = min(pm),
+    max_pm = max(pm),
+    sd = sd(pm)
+  )
+
+# Use ggplot to take a look at the time series
+ggplot(pm_lcs_fire.df) + geom_line(aes(x=date,y=pm,color=site)) 
+
+# Make box plot
+ggplot(pm_lcs_fire.df) + geom_boxplot(aes(x=site,y=pm),fill="slateblue")
+
+# Use timeVariation to look at daily and weekly patterns. pay attention to arguments
+timeVariation(pm_lcs_fire.df, pollutant = "pm")
+timeVariation(pm_lcs_fire.df, pollutant = "pm", group = "site")
+timeVariation(pm_lcs_fire.df, pollutant = "pm", group = "site", ci = FALSE)
+timeVariation(pm_lcs_fire.df, pollutant = "pm", group = "site", ci = FALSE, normalise = TRUE)
+
+timeVariation(co_lcs_fire.df, pollutant = "co")
+timeVariation(co_lcs_fire.df, pollutant = "co", group = "site")
+timeVariation(co_lcs_fire.df, pollutant = "co", group = "site", ci = FALSE)
+timeVariation(co_lcs_fire.df, pollutant = "co", group = "site", ci = FALSE, normalise = TRUE)
+
+# Compare co-located sensor01 with the reference sensor
+sensor1.df <- filter(pm_lcs_fire.df, site == "Sensor01")
+sensor1_ref.df <- merge(sensor1.df,pm_ref_fire.df, by = "date")
+
+ggplot(data=sensor1_ref.df,aes(x=pm_ref, y=pm)) + geom_point()+
+  geom_smooth(method="lm")+ stat_regline_equation(label.x=20, label.y=5.5) +
+  stat_cor(aes(label=..rr.label..), label.x=20, label.y=2) +
+  ggtitle("Sensor 1 vs Reference Sensor over Wildfire Period")
+
+
+#############################################################
+
+# Integrating met data and creating polar plots
+
+# Merge LCS and met data 
+pm_met.df <- merge(pm_lcs_fire.df, met.df)
+co_met.df <- merge(co_lcs_fire.df, met.df)
+
+# Create polar plots for each sensor individually
+polarPlot(filter(pm_met.df, site == "Sensor03"), pollutant = "pm")
+polarPlot(filter(co_met.df, site == "Sensor03"), pollutant = "co")
+
+# Weighted mean weights by how frequently that combination of WS/WD happens over the study period
+polarPlot(filter(pm_met.df, site == "Sensor03"), pollutant = "pm", statistic = "weighted.mean")
+polarPlot(filter(co_met.df, site == "Sensor03"), pollutant = "co", statistic = "weighted.mean")
+
+
+
+
+
